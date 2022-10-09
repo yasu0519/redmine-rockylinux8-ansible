@@ -1,0 +1,45 @@
+---
+- name: Install postgresql
+  ansible.builtin.dnf:
+    name:
+      - postgresql-server
+      - postgresql-devel
+      - python3-psycopg2
+    state: present
+
+- name: Check pg_hba.conf file
+  ansible.builtin.stat:
+    path: /var/lib/pgsql/data/pg_hba.conf
+  register: pg_hba
+
+- name: initdb
+  ansible.builtin.shell: PGSETUP_INITDB_OPTIONS="--encoding=UTF-8 --no-locale" postgresql-setup --initdb
+  when: not pg_hba.stat.exists
+
+- name: Check pg_hba.conf file
+  ansible.builtin.stat:
+    path: /var/lib/pgsql/data/pg_hba.conf
+  register: pg_hba
+
+- name: Edit pg_hba.conf for localhost ipv4
+  ansible.builtin.lineinfile:
+    path: /var/lib/pgsql/data/pg_hba.conf
+    regexp: '^host[\s]+all[\s]+all[\s]+127.0.0.1/32[\s]+ident'
+    line: 'host    all             all             127.0.0.1/32            md5'
+    state: present
+  when: pg_hba.stat.exists
+
+- name: Edit pg_hba.conf for localhost ipv6
+  ansible.builtin.lineinfile:
+    path: /var/lib/pgsql/data/pg_hba.conf
+    regexp: '^host[\s]+all[\s]+all[\s]+::1/128[\s]+ident'
+    line: 'host    all             all             ::1/128                 md5'
+    state: present
+  when: pg_hba.stat.exists
+
+- name: Restart PostgreSQL
+  ansible.builtin.service:
+    name: postgresql
+    state: restarted
+    enabled: yes
+  when: not ansible_check_mode

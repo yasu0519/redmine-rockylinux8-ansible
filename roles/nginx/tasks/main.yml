@@ -1,0 +1,13 @@
+---
+- name: Add nginx.repo
+  ansible.builtin.copy:
+    src: nginx.repo
+    dest: /etc/yum.repos.d/
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Install nginx
+  ansible.builtin.dnf:
+    name: nginx
+    state: present

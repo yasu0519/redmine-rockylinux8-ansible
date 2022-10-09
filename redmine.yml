@@ -1,0 +1,10 @@
+---
+- hosts: redmine
+
+  roles:
+    - disable_selinux
+    - common
+    - postgresql
+    - nginx
+    - rbenv
+    - redmine

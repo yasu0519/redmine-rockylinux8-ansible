@@ -1,0 +1,84 @@
+---
+- name: Install the 'Development tools' package group
+  ansible.builtin.dnf:
+    name: '@Development tools'
+    state: present
+
+- name: Install require packages
+  ansible.builtin.dnf:
+    name:
+      - openssl-devel
+      - libyaml-devel
+      - libffi-devel
+      - readline-devel
+      - gdbm-devel
+      - ncurses-devel
+    state: present
+  when: not ansible_check_mode
+
+- name: Add rbenv user
+  ansible.builtin.user:
+    name: "{{ rbenv_user }}"
+
+- name: Check rbenv installed
+  ansible.builtin.stat:
+    path: "{{ rbenv_dir }}/bin/rbenv"
+  register: rbenv_bin
+
+- name: Checkout rbenv
+  become_user: "{{ rbenv_user }}"
+  ansible.builtin.git:
+    repo: https://github.com/rbenv/rbenv.git
+    dest: "{{ rbenv_dir }}"
+  when: not rbenv_bin.stat.exists
+    and not ansible_check_mode
+
+- name: Checkout ruby-build
+  become_user: "{{ rbenv_user }}"
+  ansible.builtin.git:
+      repo: https://github.com/rbenv/ruby-build.git
+      dest: "{{ rbenv_dir }}/plugins/ruby-build"
+  when: not rbenv_bin.stat.exists
+    and not ansible_check_mode
+
+- name: Add rbenv path
+  become_user: "{{ rbenv_user }}"
+  ansible.builtin.lineinfile:
+    path: "{{ rbenv_user_home }}/.bashrc"
+    line: 'export PATH="$HOME/.rbenv/bin:$PATH"'
+    create: yes
+  when: not ansible_check_mode
+
+- name: Add config "load rbenv"
+  become_user: "{{ rbenv_user }}"
+  ansible.builtin.lineinfile:
+    path: "{{ rbenv_user_home }}/.bashrc"
+    line: 'eval "$(~/.rbenv/bin/rbenv init - bash)"'
+    create: yes
+  when: not ansible_check_mode
+
+- name: Get install virsion for ruby
+  become_user: "{{ rbenv_user }}"
+  ansible.builtin.shell: "{{ rbenv_dir }}/bin/rbenv install -l | grep -v - | grep {{ ruby_version }} | tail -1"
+  register: ruby_full_version
+  when: not ansible_check_mode
+
+- name: Install ruby
+  become_user: "{{ rbenv_user }}"
+  ansible.builtin.command: "{{ rbenv_dir }}/bin/rbenv install -f {{ ruby_full_version.stdout }}"
+  when: not ansible_check_mode
+
+- name: Set the default Ruby version for this machine
+  become_user: "{{ rbenv_user }}"
+  ansible.builtin.command: "{{ rbenv_dir }}/bin/rbenv global {{ ruby_full_version.stdout }}"
+  when: not ansible_check_mode
+
+- name: Rehash
+  become_user: "{{ rbenv_user }}"
+  ansible.builtin.command: "{{ rbenv_dir }}/bin/rbenv rehash"
+  when: not ansible_check_mode
+
+- name: Install bundler
+  become_user: "{{ rbenv_user }}"
+  ansible.builtin.command: "{{ rbenv_dir }}/shims/gem install bundler"
+  when: not ansible_check_mode

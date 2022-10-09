@@ -1,0 +1,190 @@
+---
+- name: Install require packages
+  ansible.builtin.dnf:
+    name: 
+      - curl-devel
+      - ImageMagick
+      - ImageMagick-devel
+      - google-noto-sans-cjk-jp-fonts
+      - subversion
+    state: present
+  when: not ansible_check_mode
+
+- name: Create db user
+  become_user: "{{ db_admin_user }}"
+  become_method: sudo
+  community.postgresql.postgresql_user:
+    name: "{{ redmine_db_user }}"
+    password: "{{ redmine_db_passwd }}"
+    encrypted: yes
+    expires: infinity
+  when: not ansible_check_mode
+
+- name: Create database
+  become_user: "{{ db_admin_user }}"
+  become_method: sudo
+  community.postgresql.postgresql_db:
+    name: "{{ redmine_db_name }}"
+    encoding: UTF-8
+    lc_collate: "{{ os_locale }}"
+    lc_ctype: "{{ os_locale }}"
+    template: template0
+    owner: redmine
+  when: not ansible_check_mode
+
+- name: Checkout Redmine source code
+  become_user: "{{ redmine_user }}"
+  ansible.builtin.subversion:
+    repo: "{{ redmine_svn_url }}"
+    dest: "{{ redmine_app_dir }}"
+  when: not ansible_check_mode
+
+- name: Create configuration.yml
+  become_user: "{{ redmine_user }}"
+  ansible.builtin.template:
+    src: configuration.yml.j2
+    dest: "{{ redmine_app_dir }}/config/configuration.yml"
+  when: not ansible_check_mode
+
+- name: Create database.yml
+  become_user: "{{ redmine_user }}"
+  ansible.builtin.template:
+    src: database.yml.j2
+    dest: "{{ redmine_app_dir }}/config/database.yml"
+  when: not ansible_check_mode
+
+- name: Create unicorn.rb
+  become_user: "{{ redmine_user }}"
+  ansible.builtin.template:
+    src: unicorn.rb.j2
+    dest: "{{ redmine_app_dir }}/config/unicorn.rb"
+  when: not ansible_check_mode
+
+- name: Edit nginx.conf
+  ansible.builtin.lineinfile:
+    path: /etc/nginx/nginx.conf
+    regexp: '^user[\s]+'
+    line: "user {{ redmine_user }};"
+  when: not ansible_check_mode
+
+- name: Check default.conf exists
+  ansible.builtin.stat:
+    path: "/etc/nginx/conf.d/default.conf"
+  register: default_conf
+
+- name: Rename default.conf
+  ansible.builtin.copy:
+    remote_src: yes
+    src: "/etc/nginx/conf.d/default.conf"
+    dest: "/etc/nginx/conf.d/default.conf.ori"
+  when: default_conf.stat.exists
+
+- name: Remove default.conf
+  ansible.builtin.file:
+    path: "/etc/nginx/conf.d/default.conf"
+    state: absent
+  when: default_conf.stat.exists
+
+- name: Create redmine.conf for nginx
+  ansible.builtin.template:
+    src: redmine.conf.j2
+    dest: "/etc/nginx/conf.d/redmine.conf"
+    mode: '0644'
+
+- name: Create redmine.service
+  ansible.builtin.template:
+    src: redmine.service.j2
+    dest: "/usr/lib/systemd/system/redmine.service"
+
+- name: Create Gemfile.local for unicorn
+  become_user: "{{ redmine_user }}"
+  ansible.builtin.template:
+    src: Gemfile.local.j2
+    dest: "{{ redmine_app_dir }}/Gemfile.local"
+  when: not ansible_check_mode
+
+- name: bundle install
+  become_user: "{{ redmine_user }}"
+  ansible.builtin.command: 
+    chdir: "{{ redmine_app_dir }}"
+    cmd: ~/.rbenv/shims/bundle install --without development test
+  when: not ansible_check_mode
+
+- name: bundle update
+  become_user: "{{ redmine_user }}"
+  ansible.builtin.command: 
+    chdir: "{{ redmine_app_dir }}"
+    cmd: ~/.rbenv/shims/bundle update
+  when: not ansible_check_mode
+
+- name: Generate secret token
+  become_user: "{{ redmine_user }}"
+  ansible.builtin.command: 
+    chdir: "{{ redmine_app_dir }}"
+    cmd: ~/.rbenv/shims/bundle exec rake generate_secret_token
+  when: not ansible_check_mode
+
+- name: Migrate database
+  become_user: "{{ redmine_user }}"
+  ansible.builtin.command: 
+    chdir: "{{ redmine_app_dir }}"
+    cmd: ~/.rbenv/shims/bundle exec rake db:migrate
+  environment:
+    RAILS_ENV: production
+  when: not ansible_check_mode
+
+- name: Load default data
+  become_user: "{{ redmine_user }}"
+  ansible.builtin.command: 
+    chdir: "{{ redmine_app_dir }}"
+    cmd: ~/.rbenv/shims/bundle exec rake redmine:load_default_data
+  environment:
+    RAILS_ENV: production
+    REDMINE_LANG: ja
+  when: not ansible_check_mode
+
+- name: Create redmine directories
+  become_user: "{{ redmine_user }}"
+  ansible.builtin.file:
+    path: "{{ redmine_app_dir }}/{{ item }}"
+    state: directory
+  with_items:
+    - tmp
+    - tmp/pdf
+    - public/plugin_assets
+  when: not ansible_check_mode
+
+- name: Change directory permissions
+  ansible.builtin.file:
+    path: "{{ redmine_app_dir }}"
+    state: directory
+    recurse: yes
+    mode: a+rx
+
+- name: Find file
+  ansible.builtin.find:
+    paths:
+      - "{{ redmine_app_dir }}/files"
+      - "{{ redmine_app_dir }}/log"
+      - "{{ redmine_app_dir }}/tmp"
+      - "{{ redmine_app_dir }}/public/plugin_assets"
+    file_type: file
+  register: rc
+
+- name: Delete Execution Privileges of files
+  ansible.builtin.command: chmod a-x "{{ item.path }}"
+  with_items: "{{ rc.files }}"
+
+- name: Restart redmine
+  ansible.builtin.service:
+    name: redmine
+    state: restarted
+    enabled: yes
+  when: not ansible_check_mode
+
+- name: Restart nginx
+  ansible.builtin.service:
+    name: nginx
+    state: restarted
+    enabled: yes
+  when: not ansible_check_mode

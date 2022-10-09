@@ -1,0 +1,3 @@
+---
+ansible_become: yes
+db_admin_user: postgres

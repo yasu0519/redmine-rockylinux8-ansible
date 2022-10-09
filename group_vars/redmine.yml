@@ -1,0 +1,24 @@
+---
+## host OS
+os_locale: ja_JP.UTF-8
+os_timezone_name: Asia/Tokyo
+
+## redmine
+redmine_version: 4.2-stable
+redmine_svn_url: "http://svn.redmine.org/redmine/branches/{{ redmine_version }}"
+redmine_user: redmine
+redmine_user_home: "/home/{{ redmine_user }}"
+redmine_app_dir: "{{ redmine_user_home }}/app"
+redmine_font_path: /usr/share/fonts/google-noto-cjk/NotoSansCJKjp-Regular.otf
+
+## database
+db_admin_user: postgres
+redmine_db_name: "{{ redmine_user }}"
+redmine_db_user: "{{ redmine_user }}"
+redmine_db_passwd: 'database_P@ssw0rd'
+
+## ruby
+rbenv_user: "{{ redmine_user }}"
+rbenv_user_home: "/home/{{ rbenv_user }}"
+rbenv_dir: "{{ rbenv_user_home }}/.rbenv"
+ruby_version: 2.7

@@ -1,0 +1,6 @@
+---
+ansible_become: yes
+rbenv_user: "app_user"
+rbenv_user_home: "/home/{{ rbenv_user }}"
+rbenv_dir: "{{ rbenv_user_home }}/.rbenv"
+ruby_version: ""

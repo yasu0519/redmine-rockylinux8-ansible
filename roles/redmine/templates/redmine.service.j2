@@ -1,0 +1,17 @@
+[Unit]
+Description=Redmine Unicorn Server
+
+[Service]
+WorkingDirectory={{ redmine_app_dir }}
+Environment=RAILS_ENV=production
+SyslogIdentifier=redmine
+PIDFile={{ redmine_app_dir }}/tmp/pids/redmine.pid
+User={{ redmine_user }}
+Group={{ redmine_user }}
+
+ExecStart={{ rbenv_dir }}/shims/bundle exec unicorn_rails -c {{ redmine_app_dir }}/config/unicorn.rb -E production
+ExecStop=/usr/bin/kill -QUIT $MAINPID
+ExecReload=/bin/kill -USR2 $MAINPID
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+---
+- name: permissive SELinux
+  ansible.builtin.command: setenforce 0
+
+- name: Disable SELinux
+  ansible.posix.selinux:
+    state: disabled
