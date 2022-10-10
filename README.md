@@ -29,7 +29,7 @@ Ansible playbook to build redmine on Rocky Linux 8.
 ### 1.　clone repository
 
 ```
-$ git clone git@github.com:yasu0519/redmine-rockylinux8-ansible.git
+$ git clone https://github.com/yasu0519/redmine-rockylinux8-ansible.git
 ```
 
 ### 2.　inventory setup
